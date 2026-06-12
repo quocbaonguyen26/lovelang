@@ -12,7 +12,7 @@ final class FlashCardViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var showingResult: Bool = false
     @Published var swipeResult: SwipeDirection = .none
-    @Published var selectedCategory: String = "All Words"
+    @Published var selectedCategory: String = "Today"
     @Published var stats: LearningStats = .empty
 
     // MARK: - Private Properties
@@ -84,9 +84,17 @@ final class FlashCardViewModel: ObservableObject {
             try? await service.markAsLearned(currentCard.vocabulary.id, isLearned: direction.isKnown)
         }
 
+        // Cập nhật local để filter đúng ngay lập tức
+        if let index = allVocabulary.firstIndex(where: { $0.id == currentCard.vocabulary.id }) {
+            allVocabulary[index].isLearned = direction.isKnown
+            allVocabulary[index].lastReviewedAt = Date()
+            allVocabulary[index].reviewCount += 1
+        }
+
         // Hiệu ứng delay trước khi chuyển card
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
             self?.moveToNextCard()
+            self?.updateStats()
         }
     }
 
@@ -115,9 +123,7 @@ final class FlashCardViewModel: ObservableObject {
         currentIndex = 0
         showingResult = false
         swipeResult = .none
-
-        // Reset trạng thái cards
-        cards = allVocabulary.map { FlashCard(vocabulary: $0) }
+        filterAndSetupCards()
     }
 
     /// Thêm từ mới
@@ -151,20 +157,12 @@ final class FlashCardViewModel: ObservableObject {
         let filtered: [Vocabulary]
 
         switch selectedCategory {
-        case "All Words":
-            filtered = allVocabulary
-        case "Nouns":
-            filtered = allVocabulary.filter { $0.partOfSpeech == .noun }
-        case "Verbs":
-            filtered = allVocabulary.filter { $0.partOfSpeech == .verb }
-        case "Adjectives":
-            filtered = allVocabulary.filter { $0.partOfSpeech == .adjective }
-        case "Adverbs":
-            filtered = allVocabulary.filter { $0.partOfSpeech == .adverb }
-        case "Learned":
-            filtered = allVocabulary.filter { $0.isLearned }
+        case "Today":
+            filtered = getTodayWords()
         case "Reviewing":
             filtered = allVocabulary.filter { !$0.isLearned }
+        case "Knew":
+            filtered = allVocabulary.filter { $0.isLearned }
         default:
             filtered = allVocabulary
         }
@@ -174,12 +172,34 @@ final class FlashCardViewModel: ObservableObject {
         currentIndex = 0
     }
 
+    private func getTodayWords() -> [Vocabulary] {
+        let today = Calendar.current.startOfDay(for: Date())
+        let reviewing = allVocabulary.filter { !$0.isLearned }
+
+        let newToday = reviewing.filter {
+            Calendar.current.isDate($0.addedAt, inSameDayAs: today)
+        }
+
+        let olderReviewing = reviewing.filter {
+            !Calendar.current.isDate($0.addedAt, inSameDayAs: today)
+        }
+
+        // Ưu tiên từ mới hôm nay, sau đó mới đến từ Reviewing cũ
+        let combined = newToday + olderReviewing
+        return Array(combined.prefix(10))
+    }
+
     private func updateStats() {
+        let totalInSession = cards.count
+        let reviewedInSession = currentIndex
+        let learnedInSession = cards.prefix(currentIndex).filter { $0.vocabulary.isLearned }.count
+        let reviewingInSession = reviewedInSession - learnedInSession
+
         stats = LearningStats(
-            totalWords: allVocabulary.count,
-            learnedWords: allVocabulary.filter { $0.isLearned }.count,
-            reviewingWords: allVocabulary.filter { !$0.isLearned }.count,
-            todayReviewed: cards.prefix(currentIndex).filter { $0.vocabulary.isLearned }.count
+            totalWords: totalInSession,
+            learnedWords: learnedInSession,
+            reviewingWords: reviewingInSession,
+            todayReviewed: reviewedInSession
         )
     }
 }

@@ -15,35 +15,42 @@ final class VocabularyService: VocabularyServiceProtocol {
 
     private let baseURL: String
     private let session: URLSession
+    private let vocabularyKey = "lovelang_vocabulary"
 
     init(baseURL: String = "https://api.example.com/v1", session: URLSession = .shared) {
         self.baseURL = baseURL
         self.session = session
     }
 
-    /// Fetch tất cả từ vựng
-    func fetchVocabulary() async throws -> [Vocabulary] {
-        // TODO: Thay thế bằng API call thực tế khi có backend
-        // let url = URL(string: "\(baseURL)/vocabulary")!
-        // let (data, _) = try await session.data(from: url)
-        // return try JSONDecoder().decode([Vocabulary].self, from: data)
+    // MARK: - Persistence
 
-        // Demo: Trả về dữ liệu mẫu
-        return DemoData.vocabularyList
+    private func loadPersistedVocabulary() -> [Vocabulary] {
+        guard let data = UserDefaults.standard.data(forKey: vocabularyKey) else { return [] }
+        return (try? JSONDecoder().decode([Vocabulary].self, from: data)) ?? []
     }
 
-    /// Thêm từ mới qua API
-    func addWord(_ request: AddWordRequest) async throws -> AddWordResponse {
-        // TODO: Thay thế bằng API call thực tế
-        // let url = URL(string: "\(baseURL)/vocabulary")!
-        // var urlRequest = URLRequest(url: url)
-        // urlRequest.httpMethod = "POST"
-        // urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // urlRequest.httpBody = try JSONEncoder().encode(request)
-        // let (data, _) = try await session.data(for: urlRequest)
-        // return try JSONDecoder().decode(AddWordResponse.self, from: data)
+    private func saveVocabulary(_ vocabulary: [Vocabulary]) {
+        let data = try? JSONEncoder().encode(vocabulary)
+        UserDefaults.standard.set(data, forKey: vocabularyKey)
+    }
 
-        // Demo: Giả lập response thành công
+    // MARK: - Fetch
+
+    func fetchVocabulary() async throws -> [Vocabulary] {
+        let persisted = loadPersistedVocabulary()
+
+        if persisted.isEmpty {
+            let demoData = DemoData.vocabularyList
+            saveVocabulary(demoData)
+            return demoData
+        }
+
+        return persisted
+    }
+
+    // MARK: - Add Word
+
+    func addWord(_ request: AddWordRequest) async throws -> AddWordResponse {
         let newWord = Vocabulary(
             word: request.word,
             pronunciation: request.pronunciation,
@@ -51,31 +58,41 @@ final class VocabularyService: VocabularyServiceProtocol {
             partOfSpeech: PartOfSpeech(rawValue: request.partOfSpeech ?? "Unknown") ?? .unknown,
             example: request.example
         )
+
+        var current = loadPersistedVocabulary()
+        current.append(newWord)
+        saveVocabulary(current)
+
         return AddWordResponse(success: true, message: "Word added successfully", word: newWord)
     }
 
-    /// Cập nhật từ vựng
+    // MARK: - Update Word
+
     func updateWord(_ word: Vocabulary) async throws {
-        // TODO: Thay thế bằng API call thực tế
-        // let url = URL(string: "\(baseURL)/vocabulary/\(word.id)")!
-        // var urlRequest = URLRequest(url: url)
-        // urlRequest.httpMethod = "PUT"
-        // urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        // urlRequest.httpBody = try JSONEncoder().encode(word)
-        // _ = try await session.data(for: urlRequest)
+        var current = loadPersistedVocabulary()
+        if let index = current.firstIndex(where: { $0.id == word.id }) {
+            current[index] = word
+            saveVocabulary(current)
+        }
     }
 
-    /// Xóa từ vựng
+    // MARK: - Delete Word
+
     func deleteWord(_ id: UUID) async throws {
-        // TODO: Thay thế bằng API call thực tế
-        // let url = URL(string: "\(baseURL)/vocabulary/\(id)")!
-        // var urlRequest = URLRequest(url: url)
-        // urlRequest.httpMethod = "DELETE"
-        // _ = try await session.data(for: urlRequest)
+        var current = loadPersistedVocabulary()
+        current.removeAll { $0.id == id }
+        saveVocabulary(current)
     }
 
-    /// Đánh dấu từ đã học/chưa học
+    // MARK: - Mark As Learned
+
     func markAsLearned(_ id: UUID, isLearned: Bool) async throws {
-        // TODO: Thay thế bằng API call thực tế
+        var current = loadPersistedVocabulary()
+        if let index = current.firstIndex(where: { $0.id == id }) {
+            current[index].isLearned = isLearned
+            current[index].lastReviewedAt = Date()
+            current[index].reviewCount += 1
+            saveVocabulary(current)
+        }
     }
 }

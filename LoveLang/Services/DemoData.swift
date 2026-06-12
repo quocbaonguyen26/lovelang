@@ -126,12 +126,8 @@ enum DemoData {
     ]
 
     static let categories: [String] = [
-        "All Words",
-        "Nouns",
-        "Verbs",
-        "Adjectives",
-        "Adverbs",
-        "Learned",
-        "Reviewing"
+        "Today",
+        "Reviewing",
+        "Knew"
     ]
 }

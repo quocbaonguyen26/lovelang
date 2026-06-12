@@ -12,6 +12,7 @@ struct Vocabulary: Identifiable, Codable, Equatable {
     var isLearned: Bool
     var lastReviewedAt: Date?
     var reviewCount: Int
+    var addedAt: Date
 
     init(
         id: UUID = UUID(),
@@ -23,7 +24,8 @@ struct Vocabulary: Identifiable, Codable, Equatable {
         synonyms: [String]? = nil,
         isLearned: Bool = false,
         lastReviewedAt: Date? = nil,
-        reviewCount: Int = 0
+        reviewCount: Int = 0,
+        addedAt: Date? = nil
     ) {
         self.id = id
         self.word = word
@@ -35,6 +37,7 @@ struct Vocabulary: Identifiable, Codable, Equatable {
         self.isLearned = isLearned
         self.lastReviewedAt = lastReviewedAt
         self.reviewCount = reviewCount
+        self.addedAt = addedAt ?? Date()
     }
 }
 
